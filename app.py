@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V9", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V10", layout="wide")
 
 st.markdown("""
     <style>
@@ -36,13 +36,6 @@ st.markdown("""
         padding: 2px 5px;
         font-size: 12px;
         height: 32px;
-    }
-    /* GAYA BARU UNTUK CATATAN KECIL */
-    .catatan-kecil {
-        font-size: 12px;
-        color: #888888;
-        margin-top: -12px;
-        font-style: italic;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -136,47 +129,58 @@ if not data.empty and all(a in data.columns for a in assets):
     alpha = (port_returns.mean() * 252) - (0.04 + (port_returns.cov(bench_returns)/bench_returns.var()) * ((bench_returns.mean() * 252) - 0.04))
     alpha_pct = alpha * 100
 
-    # 4. LOGIKA ATURAN BAKU (CATATAN KECIL)
-    # Sharpe Note
-    if sharpe < 1.0:
-        note_sharpe = "Sedang (< 1.0)"
-    elif sharpe <= 1.5:
-        note_sharpe = "Baik (1.0 - 1.5)"
+    # 4. LOGIKA ATURAN BAKU DENGAN EMOJI
+    # Sharpe Ratio Logic
+    if sharpe > 1.5:
+        note_sharpe = "🔵 Baik"
+    elif sharpe >= 1.0:
+        note_sharpe = "🟡 Sedang"
     else:
-        note_sharpe = "Bagus (> 1.5)"
+        note_sharpe = "🔴 Kurang"
 
-    # Alpha Note
-    if alpha_pct < 0:
-        note_alpha = "Kurang (< 0%)"
-    elif alpha_pct <= 5.0:
-        note_alpha = "Normal (0 - 5%)"
+    # Alpha Logic
+    if alpha_pct > 5.0:
+        note_alpha = "🔵 Baik"
+    elif alpha_pct >= 0.0:
+        note_alpha = "🟡 Sedang"
     else:
-        note_alpha = "Bagus (> 5%)"
+        note_alpha = "🔴 Kurang"
 
-    # Drawdown Note
+    # Drawdown Logic
     if max_dd >= -0.15:
-        note_dd = "Normal (0% s.d -15%)"
+        note_dd = "🔵 Baik"
     elif max_dd >= -0.30:
-        note_dd = "Medium (-15% s.d -30%)"
+        note_dd = "🟡 Sedang"
     else:
-        note_dd = "Ekstrem (< -30%)"
+        note_dd = "🔴 Kurang"
+
+    # FUNGSI KUSTOM UNTUK KOTAK METRIK (Posisi Emoji di Kanan)
+    def kpi_card(title, value, sub_text):
+        return f"""
+        <div style="background-color: #161824; padding: 15px 20px; border-radius: 8px; border-left: 3px solid #333333;">
+            <div style="color: #888888; font-size: 13px; font-weight: bold; margin-bottom: 5px;">{title}</div>
+            <div style="display: flex; align-items: center;">
+                <div style="font-size: 30px; font-weight: bold; color: #FFFFFF; line-height: 1;">{value}</div>
+                <div style="font-size: 14px; color: #BBBBBB; margin-left: 12px; font-weight: 500;">{sub_text}</div>
+            </div>
+        </div>
+        """
 
     # 5. Tampilan Dasbor
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     
-    m1.metric("Nilai Portofolio", f"${curr_val:.2f}", f"Target: ${capital_target}")
-    
-    m2.metric("Sharpe Ratio", f"{sharpe:.2f}")
-    m2.markdown(f"<p class='catatan-kecil'>Skor: {note_sharpe}</p>", unsafe_allow_html=True)
-    
-    m3.metric("Alpha", f"{alpha_pct:.1f}%")
-    m3.markdown(f"<p class='catatan-kecil'>Kategori: {note_alpha}</p>", unsafe_allow_html=True)
-    
-    m4.metric("Max Drawdown", f"{max_dd*100:.2f}%")
-    m4.markdown(f"<p class='catatan-kecil'>Risiko: {note_dd}</p>", unsafe_allow_html=True)
+    with m1:
+        st.markdown(kpi_card("Nilai Portofolio", f"${curr_val:.2f}", f"🎯 Target: ${capital_target}"), unsafe_allow_html=True)
+    with m2:
+        st.markdown(kpi_card("Sharpe Ratio", f"{sharpe:.2f}", note_sharpe), unsafe_allow_html=True)
+    with m3:
+        st.markdown(kpi_card("Alpha Keunggulan", f"{alpha_pct:.1f}%", note_alpha), unsafe_allow_html=True)
+    with m4:
+        st.markdown(kpi_card("Max Drawdown", f"{max_dd*100:.2f}%", note_dd), unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True) # Spasi ekstra
+    
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Kurva Ekuitas vs Benchmark")
@@ -186,7 +190,8 @@ if not data.empty and all(a in data.columns for a in assets):
         fig1.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
         fig1.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
                           hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True),
-                          legend=dict(orientation="h", y=1.1, x=0))
+                          legend=dict(orientation="h", y=1.1, x=0),
+                          paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig1, use_container_width=True, config={'staticPlot': True})
 
     with c2:
@@ -194,7 +199,8 @@ if not data.empty and all(a in data.columns for a in assets):
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown, fill='tozeroy', line=dict(color='#ff4444', width=1)))
         fig2.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
-                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'))
+                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'),
+                          paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
     st.warning("Menunggu input ticker yang valid...")
