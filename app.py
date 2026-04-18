@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V10", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V12", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,14 +22,17 @@ st.markdown("""
         margin-bottom: 20px;
         letter-spacing: -0.5px;
     }
+    
+    /* Warna disesuaikan agar bersih dan menyatu dengan Light Mode */
     .locked-weight {
-        background-color: #1e2130;
+        background-color: rgba(128, 128, 128, 0.05);
         padding: 8px 10px;
         border-radius: 5px;
         font-size: 15px;
-        color: #00FFCC;
+        font-weight: bold;
+        color: inherit;
         text-align: center;
-        border: 1px solid #333333;
+        border: 1px solid rgba(128, 128, 128, 0.2);
         margin-top: 2px;
     }
     .stButton>button {
@@ -40,7 +43,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
+# PERBAIKAN: "Nexus" dihapus agar judul lebih simetris
+st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy</p>', unsafe_allow_html=True)
 
 if 'num_assets' not in st.session_state:
     st.session_state.num_assets = 3 
@@ -130,7 +134,6 @@ if not data.empty and all(a in data.columns for a in assets):
     alpha_pct = alpha * 100
 
     # 4. LOGIKA ATURAN BAKU DENGAN EMOJI
-    # Sharpe Ratio Logic
     if sharpe > 1.5:
         note_sharpe = "🔵 Baik"
     elif sharpe >= 1.0:
@@ -138,7 +141,6 @@ if not data.empty and all(a in data.columns for a in assets):
     else:
         note_sharpe = "🔴 Kurang"
 
-    # Alpha Logic
     if alpha_pct > 5.0:
         note_alpha = "🔵 Baik"
     elif alpha_pct >= 0.0:
@@ -146,7 +148,6 @@ if not data.empty and all(a in data.columns for a in assets):
     else:
         note_alpha = "🔴 Kurang"
 
-    # Drawdown Logic
     if max_dd >= -0.15:
         note_dd = "🔵 Baik"
     elif max_dd >= -0.30:
@@ -154,42 +155,52 @@ if not data.empty and all(a in data.columns for a in assets):
     else:
         note_dd = "🔴 Kurang"
 
-    # FUNGSI KUSTOM UNTUK KOTAK METRIK (Posisi Emoji di Kanan)
-    def kpi_card(title, value, sub_text):
+    # PERBAIKAN: Background kartu diubah menjadi transparan agar putih bersih
+    def kpi_card(title, value, sub_text, legend_text=""):
         return f"""
-        <div style="background-color: #161824; padding: 15px 20px; border-radius: 8px; border-left: 3px solid #333333;">
-            <div style="color: #888888; font-size: 13px; font-weight: bold; margin-bottom: 5px;">{title}</div>
-            <div style="display: flex; align-items: center;">
-                <div style="font-size: 30px; font-weight: bold; color: #FFFFFF; line-height: 1;">{value}</div>
-                <div style="font-size: 14px; color: #BBBBBB; margin-left: 12px; font-weight: 500;">{sub_text}</div>
+        <div style="background-color: transparent; padding: 15px 20px; border-radius: 8px; border: 1px solid rgba(128, 128, 128, 0.2); border-left: 4px solid #0088ff; height: 100%;">
+            <div style="color: #666666; font-size: 13px; font-weight: bold; margin-bottom: 5px;">{title}</div>
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <div style="font-size: 30px; font-weight: bold; line-height: 1;">{value}</div>
+                <div style="font-size: 14px; margin-left: 12px; font-weight: 500;">{sub_text}</div>
+            </div>
+            <div style="font-size: 11px; color: #888888; border-top: 1px solid rgba(128, 128, 128, 0.2); padding-top: 8px;">
+                {legend_text}
             </div>
         </div>
         """
+
+    legend_sharpe = "🔴 < 1.0 &nbsp;|&nbsp; 🟡 1.0 - 1.5 &nbsp;|&nbsp; 🔵 > 1.5"
+    legend_alpha = "🔴 < 0% &nbsp;|&nbsp; 🟡 0 - 5% &nbsp;|&nbsp; 🔵 > 5%"
+    legend_dd = "🔵 0 s/d -15% &nbsp;|&nbsp; 🟡 -15% s/d -30% &nbsp;|&nbsp; 🔴 < -30%"
+    legend_target = f"Basis: ${capital_base:.0f} ➔ Target: ${capital_target:.0f}"
 
     # 5. Tampilan Dasbor
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     
     with m1:
-        st.markdown(kpi_card("Nilai Portofolio", f"${curr_val:.2f}", f"🎯 Target: ${capital_target}"), unsafe_allow_html=True)
+        st.markdown(kpi_card("Nilai Portofolio", f"${curr_val:.2f}", f"🎯 Target", legend_target), unsafe_allow_html=True)
     with m2:
-        st.markdown(kpi_card("Sharpe Ratio", f"{sharpe:.2f}", note_sharpe), unsafe_allow_html=True)
+        st.markdown(kpi_card("Sharpe Ratio", f"{sharpe:.2f}", note_sharpe, legend_sharpe), unsafe_allow_html=True)
     with m3:
-        st.markdown(kpi_card("Alpha Keunggulan", f"{alpha_pct:.1f}%", note_alpha), unsafe_allow_html=True)
+        st.markdown(kpi_card("Alpha Keunggulan", f"{alpha_pct:.1f}%", note_alpha, legend_alpha), unsafe_allow_html=True)
     with m4:
-        st.markdown(kpi_card("Max Drawdown", f"{max_dd*100:.2f}%", note_dd), unsafe_allow_html=True)
+        st.markdown(kpi_card("Max Drawdown", f"{max_dd*100:.2f}%", note_dd, legend_dd), unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True) # Spasi ekstra
+    st.markdown("<br>", unsafe_allow_html=True) 
     
+    # PERBAIKAN: Menghapus template warna gelap agar grafik otomatis menjadi putih/terang
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Kurva Ekuitas vs Benchmark")
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio', line=dict(color='#00FFCC', width=2)))
-        fig1.add_trace(go.Scatter(x=bench_cum.index, y=bench_cum, name='Benchmark', line=dict(color='#666666', width=1)))
+        fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio', line=dict(color='#0088ff', width=2)))
+        fig1.add_trace(go.Scatter(x=bench_cum.index, y=bench_cum, name='Benchmark', line=dict(color='#888888', width=1.5)))
         fig1.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
-        fig1.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
-                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True),
+        fig1.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10),
+                          hovermode=False, xaxis=dict(fixedrange=True), 
+                          yaxis=dict(fixedrange=True, gridcolor='rgba(128,128,128,0.2)'),
                           legend=dict(orientation="h", y=1.1, x=0),
                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig1, use_container_width=True, config={'staticPlot': True})
@@ -198,8 +209,9 @@ if not data.empty and all(a in data.columns for a in assets):
         st.subheader("Peta Drawdown")
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown, fill='tozeroy', line=dict(color='#ff4444', width=1)))
-        fig2.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
-                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'),
+        fig2.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10),
+                          hovermode=False, xaxis=dict(fixedrange=True), 
+                          yaxis=dict(fixedrange=True, tickformat='.1%', gridcolor='rgba(128,128,128,0.2)'),
                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
