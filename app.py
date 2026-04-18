@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V6", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V7", layout="wide")
 
 st.markdown("""
     <style>
@@ -28,7 +28,6 @@ st.markdown("""
         color: #888888;
         margin-bottom: 0px;
     }
-    /* PERBAIKAN 1: Gaya visual untuk bobot yang dikunci (Locked) */
     .locked-weight {
         background-color: #1e2130;
         padding: 8px 10px;
@@ -39,31 +38,38 @@ st.markdown("""
         border: 1px solid #333333;
         margin-top: 2px;
     }
+    .stButton>button {
+        padding: 2px 10px;
+        font-size: 12px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
 
+# MANAJEMEN STATE UNTUK JUMLAH ASET
 if 'num_assets' not in st.session_state:
     st.session_state.num_assets = 3 
 
 # 2. Panel Input Samping
 st.sidebar.header("Konfigurasi Portofolio")
-capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, label_visibility="visible")
-capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0, label_visibility="visible")
+capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0)
+capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0)
 benchmark_ticker = st.sidebar.text_input("Benchmark", value="SPY").upper()
 
 st.sidebar.markdown("---")
-
 st.sidebar.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Aset & Alokasi Sistem</p>', unsafe_allow_html=True)
 
-# PERBAIKAN 4: Tombol lebih kecil tanpa emoji berlebihan
-col_btn, _ = st.sidebar.columns([1.2, 1]) 
-with col_btn:
-    if st.button("+ Tambah Aset"):
+# TOMBOL TAMBAH & HAPUS (UKURAN KECIL)
+col_btn1, col_btn2 = st.sidebar.columns([1, 1])
+with col_btn1:
+    if st.button("+ Tambah"):
         st.session_state.num_assets += 1
+with col_btn2:
+    if st.button("- Hapus"):
+        if st.session_state.num_assets > 1:
+            st.session_state.num_assets -= 1
 
-# PERBAIKAN 1: Header disesuaikan hanya 2 kolom (Nama dan Bobot Sistem)
 h1, h2 = st.sidebar.columns([2, 1.5])
 h1.markdown('<p class="col-header">Nama Aset</p>', unsafe_allow_html=True)
 h2.markdown('<p class="col-header">Bobot Wajib</p>', unsafe_allow_html=True)
@@ -85,15 +91,13 @@ for i in range(st.session_state.num_assets):
         container = st.sidebar
     else:
         if i == 3:
-            expander = st.sidebar.expander("⬇️ Tampilkan Aset Tambahan", expanded=False)
+            expander = st.sidebar.expander("⬇️ Aset Tambahan", expanded=False)
         container = expander
         
     col_a, col_w = container.columns([2, 1.5])
-    
     with col_a:
         t = st.text_input(f"t{i}", value=default_val, key=f"t_{i}", label_visibility="collapsed").upper()
     with col_w:
-        # PERBAIKAN 1: Angka dilock menjadi teks statis dengan gembok
         st.markdown(f"<div class='locked-weight'>{ref_w}% 🔒</div>", unsafe_allow_html=True)
         
     if t:
@@ -102,7 +106,7 @@ for i in range(st.session_state.num_assets):
 
 weights_norm = np.array(weights) / 100 if sum(weights) > 0 else np.array(weights)
 
-# 3. Pengambilan Data & Validasi
+# 3. Pengambilan Data & Komputasi
 @st.cache_data(ttl=3600)
 def get_data(tickers, benchmark):
     valid_tickers = [t for t in tickers if t]
@@ -110,70 +114,55 @@ def get_data(tickers, benchmark):
     try:
         data = yf.download(all_tickers, period="3y", progress=False)['Close']
         return data
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
 data = get_data(assets, benchmark_ticker)
 
 if not data.empty and all(a in data.columns for a in assets):
     returns = data.pct_change().dropna()
-    
     port_returns = returns[assets].dot(weights_norm)
     bench_returns = returns[benchmark_ticker]
 
     port_cum = (1 + port_returns).cumprod() * capital_base
     bench_cum = (1 + bench_returns).cumprod() * capital_base
-    current_value = port_cum.iloc[-1]
-
-    # PERBAIKAN 2: Kalkulasi Drawdown
+    
+    # Drawdown
     roll_max = port_cum.cummax()
     drawdown = (port_cum / roll_max) - 1
-    max_drawdown = drawdown.min()
-
-    # Alpha & Sharpe
-    risk_free = 0.04 / 252
-    sharpe = ((port_returns.mean() - risk_free) / port_returns.std()) * np.sqrt(252)
-    beta = port_returns.cov(bench_returns) / bench_returns.var()
-    alpha = (port_returns.mean() * 252) - (0.04 + beta * ((bench_returns.mean() * 252) - 0.04))
+    
+    # Metrik
+    curr_val = port_cum.iloc[-1]
+    sharpe = ((port_returns.mean() - (0.04/252)) / port_returns.std()) * np.sqrt(252)
+    alpha = (port_returns.mean() * 252) - (0.04 + (port_returns.cov(bench_returns)/bench_returns.var()) * ((bench_returns.mean() * 252) - 0.04))
 
     # 4. Tampilan Dasbor
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
-    
-    m1.metric("Nilai Portofolio (Sistem)", f"${current_value:.2f}", f"Target: ${capital_target}")
+    m1.metric("Nilai Portofolio", f"${curr_val:.2f}", f"Target: ${capital_target}")
     m2.metric("Sharpe Ratio", f"{sharpe:.2f}")
     m3.metric("Alpha", f"{alpha*100:.1f}%")
-    # PERBAIKAN 3: Menghilangkan Estimasi Waktu, menggantinya dengan Max Drawdown
-    m4.metric("Max Drawdown", f"{max_drawdown*100:.2f}%")
+    m4.metric("Max Drawdown", f"{drawdown.min()*100:.2f}%")
 
     st.markdown("---")
-    
-    # Visualisasi Kurva Ekuitas
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        st.subheader("Kurva Ekuitas vs Benchmark")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("Kurva Ekuitas")
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio Sistem', line=dict(color='#00FFCC', width=2)))
+        fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio', line=dict(color='#00FFCC', width=2)))
         fig1.add_trace(go.Scatter(x=bench_cum.index, y=bench_cum, name='Benchmark', line=dict(color='#666666', width=1)))
         fig1.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
-
         fig1.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
-                          hovermode=False, xaxis=dict(showgrid=False, fixedrange=True),
-                          yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True),
+                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True),
                           legend=dict(orientation="h", y=1.1, x=0))
-        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+        st.plotly_chart(fig1, use_container_width=True, config={'staticPlot': True})
 
-    # PERBAIKAN 2: Mengembalikan Peta Drawdown Statis
-    with col_c2:
-        st.subheader("Peta Drawdown (Manajemen Risiko)")
+    with c2:
+        st.subheader("Peta Drawdown")
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown, fill='tozeroy', mode='lines', name='Drawdown', line=dict(color='#ff4444', width=1)))
-        
+        fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown, fill='tozeroy', line=dict(color='#ff4444', width=1)))
         fig2.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
-                          hovermode=False, xaxis=dict(showgrid=False, fixedrange=True),
-                          yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True, tickformat='.1%'))
-        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
-
+                          hovermode=False, xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'))
+        st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
     st.warning("Menunggu input ticker yang valid...")
