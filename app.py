@@ -5,33 +5,22 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V4", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V6", layout="wide")
 
-# CSS Khusus untuk memanipulasi tampilan (Kapital, Hapus Spin Button, Margin)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Mematikan tombol plus-minus (-+) pada input angka */
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-    input[type=number] {
-        -moz-appearance: textfield;
-    }
-    
-    /* Memaksa input teks selalu huruf kapital di layar */
     input[type=text] {
         text-transform: uppercase;
     }
 
     .main-title {
-        font-size: 24px !important;
+        font-size: 36px !important; 
         font-weight: bold;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
+        letter-spacing: -0.5px;
     }
     .col-header {
         font-size: 13px;
@@ -39,20 +28,24 @@ st.markdown("""
         color: #888888;
         margin-bottom: 0px;
     }
-    .ref-text {
-        font-size: 14px;
-        color: #888888;
-        margin-top: 8px;
+    /* PERBAIKAN 1: Gaya visual untuk bobot yang dikunci (Locked) */
+    .locked-weight {
+        background-color: #1e2130;
+        padding: 8px 10px;
+        border-radius: 5px;
+        font-size: 15px;
+        color: #00FFCC;
+        text-align: center;
+        border: 1px solid #333333;
+        margin-top: 2px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# PERBAIKAN 7: Menambahkan ikon grafik di depan judul
 st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
 
-# --- MANAJEMEN STATE UNTUK TOMBOL TAMBAH ASET ---
 if 'num_assets' not in st.session_state:
-    st.session_state.num_assets = 3 # PERBAIKAN 2: Munculkan 3 default di awal
+    st.session_state.num_assets = 3 
 
 # 2. Panel Input Samping
 st.sidebar.header("Konfigurasi Portofolio")
@@ -62,35 +55,32 @@ benchmark_ticker = st.sidebar.text_input("Benchmark", value="SPY").upper()
 
 st.sidebar.markdown("---")
 
-# PERBAIKAN 1: Judul baru & Tombol Tambah Aset berbentuk kotak kecil di kiri
-st.sidebar.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Aset & Alokasi</p>', unsafe_allow_html=True)
-col_btn, _ = st.sidebar.columns([1, 1]) # Membuat tombol setengah ukuran di kiri
+st.sidebar.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Aset & Alokasi Sistem</p>', unsafe_allow_html=True)
+
+# PERBAIKAN 4: Tombol lebih kecil tanpa emoji berlebihan
+col_btn, _ = st.sidebar.columns([1.2, 1]) 
 with col_btn:
-    if st.button("➕ Tambah Aset", use_container_width=True):
+    if st.button("+ Tambah Aset"):
         st.session_state.num_assets += 1
 
-# PERBAIKAN 4: Title Sejajar Satu Baris (Nama Aset | Alokasi | Reff)
-h1, h2, h3 = st.sidebar.columns([2, 1.2, 1])
+# PERBAIKAN 1: Header disesuaikan hanya 2 kolom (Nama dan Bobot Sistem)
+h1, h2 = st.sidebar.columns([2, 1.5])
 h1.markdown('<p class="col-header">Nama Aset</p>', unsafe_allow_html=True)
-h2.markdown('<p class="col-header">Alokasi(%)</p>', unsafe_allow_html=True)
-h3.markdown('<p class="col-header">Reff</p>', unsafe_allow_html=True)
+h2.markdown('<p class="col-header">Bobot Wajib</p>', unsafe_allow_html=True)
 
 assets = []
 weights = []
 defaults = ["NVDA", "VST", "PLTR", "GLD", "BTC", "TSM", "AMD"]
 
-# Logic Bobot Referensi
 def get_ref_weight(index, total):
     decay = 0.7 ** index
     raw_weights = [0.7 ** i for i in range(total)]
     return round((decay / sum(raw_weights)) * 100, 1)
 
-# PERBAIKAN 2: Menampilkan 3 aset pertama, sisanya di dropdown
 for i in range(st.session_state.num_assets):
     ref_w = get_ref_weight(i, st.session_state.num_assets)
     default_val = defaults[i] if i < len(defaults) else ""
     
-    # Pisahkan lokasi penempatan (Langsung vs Expander/Dropdown)
     if i < 3:
         container = st.sidebar
     else:
@@ -98,21 +88,17 @@ for i in range(st.session_state.num_assets):
             expander = st.sidebar.expander("⬇️ Tampilkan Aset Tambahan", expanded=False)
         container = expander
         
-    col_a, col_w, col_r = container.columns([2, 1.2, 1])
+    col_a, col_w = container.columns([2, 1.5])
     
     with col_a:
-        # PERBAIKAN 5: Huruf kapital ditangani oleh CSS dan backend .upper()
-        # label_visibility="collapsed" membuat tampilan menjadi kotak rapi tanpa teks label
         t = st.text_input(f"t{i}", value=default_val, key=f"t_{i}", label_visibility="collapsed").upper()
     with col_w:
-        # PERBAIKAN 3: Tanda (-+) dihilangkan otomatis lewat CSS di atas
-        w = st.number_input(f"w{i}", value=float(ref_w), key=f"w_{i}", label_visibility="collapsed")
-    with col_r:
-        st.markdown(f"<p class='ref-text'>{ref_w}%</p>", unsafe_allow_html=True)
+        # PERBAIKAN 1: Angka dilock menjadi teks statis dengan gembok
+        st.markdown(f"<div class='locked-weight'>{ref_w}% 🔒</div>", unsafe_allow_html=True)
         
     if t:
         assets.append(t)
-        weights.append(w)
+        weights.append(ref_w)
 
 weights_norm = np.array(weights) / 100 if sum(weights) > 0 else np.array(weights)
 
@@ -131,24 +117,20 @@ data = get_data(assets, benchmark_ticker)
 
 if not data.empty and all(a in data.columns for a in assets):
     returns = data.pct_change().dropna()
+    
     port_returns = returns[assets].dot(weights_norm)
     bench_returns = returns[benchmark_ticker]
 
-    port_cum_returns = (1 + port_returns).cumprod() * capital_base
-    bench_cum_returns = (1 + bench_returns).cumprod() * capital_base
+    port_cum = (1 + port_returns).cumprod() * capital_base
+    bench_cum = (1 + bench_returns).cumprod() * capital_base
+    current_value = port_cum.iloc[-1]
 
-    current_value = port_cum_returns.iloc[-1]
-    years_data = len(port_returns) / 252
-    cagr = ((current_value / capital_base) ** (1 / years_data)) - 1
+    # PERBAIKAN 2: Kalkulasi Drawdown
+    roll_max = port_cum.cummax()
+    drawdown = (port_cum / roll_max) - 1
+    max_drawdown = drawdown.min()
 
-    if cagr > 0 and current_value < capital_target:
-        time_to_target = np.log(capital_target / current_value) / np.log(1 + cagr)
-        time_str = f"{time_to_target:.1f} Tahun"
-    elif current_value >= capital_target:
-        time_str = "Tercapai"
-    else:
-        time_str = "N/A"
-
+    # Alpha & Sharpe
     risk_free = 0.04 / 252
     sharpe = ((port_returns.mean() - risk_free) / port_returns.std()) * np.sqrt(252)
     beta = port_returns.cov(bench_returns) / bench_returns.var()
@@ -158,28 +140,40 @@ if not data.empty and all(a in data.columns for a in assets):
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     
-    m1.metric("Nilai Portofolio", f"${current_value:.2f}", f"Target: ${capital_target}")
+    m1.metric("Nilai Portofolio (Sistem)", f"${current_value:.2f}", f"Target: ${capital_target}")
     m2.metric("Sharpe Ratio", f"{sharpe:.2f}")
     m3.metric("Alpha", f"{alpha*100:.1f}%")
-    m4.metric("Estimasi Waktu", time_str)
+    # PERBAIKAN 3: Menghilangkan Estimasi Waktu, menggantinya dengan Max Drawdown
+    m4.metric("Max Drawdown", f"{max_drawdown*100:.2f}%")
 
     st.markdown("---")
     
-    st.subheader("Visualisasi Pertumbuhan Portofolio")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=port_cum_returns.index, y=port_cum_returns, name='Portofolio', line=dict(color='#00FFCC', width=2)))
-    fig.add_trace(go.Scatter(x=bench_cum_returns.index, y=bench_cum_returns, name='Benchmark', line=dict(color='#666666', width=1)))
-    fig.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
+    # Visualisasi Kurva Ekuitas
+    col_c1, col_c2 = st.columns(2)
+    
+    with col_c1:
+        st.subheader("Kurva Ekuitas vs Benchmark")
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio Sistem', line=dict(color='#00FFCC', width=2)))
+        fig1.add_trace(go.Scatter(x=bench_cum.index, y=bench_cum, name='Benchmark', line=dict(color='#666666', width=1)))
+        fig1.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
 
-    fig.update_layout(
-        height=450, 
-        template="plotly_dark", 
-        margin=dict(l=10, r=10, t=10, b=10),
-        hovermode=False, 
-        xaxis=dict(showgrid=False, fixedrange=True),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True),
-        legend=dict(orientation="h", y=1.1, x=0)
-    )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+        fig1.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
+                          hovermode=False, xaxis=dict(showgrid=False, fixedrange=True),
+                          yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True),
+                          legend=dict(orientation="h", y=1.1, x=0))
+        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+
+    # PERBAIKAN 2: Mengembalikan Peta Drawdown Statis
+    with col_c2:
+        st.subheader("Peta Drawdown (Manajemen Risiko)")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=drawdown.index, y=drawdown, fill='tozeroy', mode='lines', name='Drawdown', line=dict(color='#ff4444', width=1)))
+        
+        fig2.update_layout(height=350, template="plotly_dark", margin=dict(l=10, r=10, t=10, b=10),
+                          hovermode=False, xaxis=dict(showgrid=False, fixedrange=True),
+                          yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True, tickformat='.1%'))
+        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+
 else:
     st.warning("Menunggu input ticker yang valid...")
