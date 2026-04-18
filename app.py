@@ -5,62 +5,110 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V3", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V4", layout="wide")
 
-# PERBAIKAN 1 & 2: Header dimunculkan untuk tombol sidebar, warna judul disesuaikan otomatis
+# CSS Khusus untuk memanipulasi tampilan (Kapital, Hapus Spin Button, Margin)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* Mematikan tombol plus-minus (-+) pada input angka */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    input[type=number] {
+        -moz-appearance: textfield;
+    }
+    
+    /* Memaksa input teks selalu huruf kapital di layar */
+    input[type=text] {
+        text-transform: uppercase;
+    }
+
     .main-title {
-        font-size: 22px !important;
+        font-size: 24px !important;
         font-weight: bold;
         margin-bottom: 15px;
     }
-    .ref-text {
-        font-size: 12px;
+    .col-header {
+        font-size: 13px;
+        font-weight: bold;
         color: #888888;
-        font-style: italic;
+        margin-bottom: 0px;
+    }
+    .ref-text {
+        font-size: 14px;
+        color: #888888;
+        margin-top: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
+# PERBAIKAN 7: Menambahkan ikon grafik di depan judul
+st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
+
+# --- MANAJEMEN STATE UNTUK TOMBOL TAMBAH ASET ---
+if 'num_assets' not in st.session_state:
+    st.session_state.num_assets = 3 # PERBAIKAN 2: Munculkan 3 default di awal
 
 # 2. Panel Input Samping
 st.sidebar.header("Konfigurasi Portofolio")
-capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, step=1.0)
-capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0, step=1.0)
+capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, label_visibility="visible")
+capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0, label_visibility="visible")
 benchmark_ticker = st.sidebar.text_input("Benchmark", value="SPY").upper()
 
 st.sidebar.markdown("---")
-num_assets = st.sidebar.number_input("Jumlah Aset", min_value=1, max_value=15, value=5)
+
+# PERBAIKAN 1: Judul baru & Tombol Tambah Aset berbentuk kotak kecil di kiri
+st.sidebar.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Aset & Alokasi</p>', unsafe_allow_html=True)
+col_btn, _ = st.sidebar.columns([1, 1]) # Membuat tombol setengah ukuran di kiri
+with col_btn:
+    if st.button("➕ Tambah Aset", use_container_width=True):
+        st.session_state.num_assets += 1
+
+# PERBAIKAN 4: Title Sejajar Satu Baris (Nama Aset | Alokasi | Reff)
+h1, h2, h3 = st.sidebar.columns([2, 1.2, 1])
+h1.markdown('<p class="col-header">Nama Aset</p>', unsafe_allow_html=True)
+h2.markdown('<p class="col-header">Alokasi(%)</p>', unsafe_allow_html=True)
+h3.markdown('<p class="col-header">Reff</p>', unsafe_allow_html=True)
 
 assets = []
 weights = []
+defaults = ["NVDA", "VST", "PLTR", "GLD", "BTC", "TSM", "AMD"]
 
-# Logic Bobot Referensi (Strategi Aggressive Growth)
+# Logic Bobot Referensi
 def get_ref_weight(index, total):
-    if total == 5:
-        return [35.0, 25.0, 20.0, 10.0, 10.0][index]
+    decay = 0.7 ** index
+    raw_weights = [0.7 ** i for i in range(total)]
+    return round((decay / sum(raw_weights)) * 100, 1)
+
+# PERBAIKAN 2: Menampilkan 3 aset pertama, sisanya di dropdown
+for i in range(st.session_state.num_assets):
+    ref_w = get_ref_weight(i, st.session_state.num_assets)
+    default_val = defaults[i] if i < len(defaults) else ""
+    
+    # Pisahkan lokasi penempatan (Langsung vs Expander/Dropdown)
+    if i < 3:
+        container = st.sidebar
     else:
-        decay = 0.7 ** index
-        raw_weights = [0.7 ** i for i in range(total)]
-        return round((decay / sum(raw_weights)) * 100, 1)
-
-defaults = ["NVDA", "VST", "PLTR", "GLD", "BTC"]
-
-for i in range(num_assets):
-    ref_w = get_ref_weight(i, num_assets)
-    col_a, col_w, col_r = st.sidebar.columns([2, 1, 1])
+        if i == 3:
+            expander = st.sidebar.expander("⬇️ Tampilkan Aset Tambahan", expanded=False)
+        container = expander
+        
+    col_a, col_w, col_r = container.columns([2, 1.2, 1])
     
     with col_a:
-        default_val = defaults[i] if i < len(defaults) else ""
-        t = st.text_input(f"Ticker {i+1}", value=default_val, key=f"t{i}").upper()
+        # PERBAIKAN 5: Huruf kapital ditangani oleh CSS dan backend .upper()
+        # label_visibility="collapsed" membuat tampilan menjadi kotak rapi tanpa teks label
+        t = st.text_input(f"t{i}", value=default_val, key=f"t_{i}", label_visibility="collapsed").upper()
     with col_w:
-        w = st.number_input(f"% {i+1}", value=ref_w, step=1.0, key=f"w{i}")
+        # PERBAIKAN 3: Tanda (-+) dihilangkan otomatis lewat CSS di atas
+        w = st.number_input(f"w{i}", value=float(ref_w), key=f"w_{i}", label_visibility="collapsed")
     with col_r:
-        st.markdown(f"<p class='ref-text'>Ref:<br>{ref_w}%</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='ref-text'>{ref_w}%</p>", unsafe_allow_html=True)
         
     if t:
         assets.append(t)
@@ -110,7 +158,6 @@ if not data.empty and all(a in data.columns for a in assets):
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     
-    # PERBAIKAN 3: Menambahkan kembali tulisan target hijau
     m1.metric("Nilai Portofolio", f"${current_value:.2f}", f"Target: ${capital_target}")
     m2.metric("Sharpe Ratio", f"{sharpe:.2f}")
     m3.metric("Alpha", f"{alpha*100:.1f}%")
@@ -124,18 +171,15 @@ if not data.empty and all(a in data.columns for a in assets):
     fig.add_trace(go.Scatter(x=bench_cum_returns.index, y=bench_cum_returns, name='Benchmark', line=dict(color='#666666', width=1)))
     fig.add_hline(y=capital_target, line_dash="dot", line_color="#FF4B4B")
 
-    # PERBAIKAN 4: Mengunci mati grafik agar tidak bisa disentuh/di-zoom
     fig.update_layout(
         height=450, 
         template="plotly_dark", 
         margin=dict(l=10, r=10, t=10, b=10),
         hovermode=False, 
-        xaxis=dict(showgrid=False, fixedrange=True), # fixedrange mengunci axis X
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True), # fixedrange mengunci axis Y
+        xaxis=dict(showgrid=False, fixedrange=True),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', fixedrange=True),
         legend=dict(orientation="h", y=1.1, x=0)
     )
-    
-    # Perintah 'staticPlot': True akan mematikan semua fungsi interaktif layar sentuh
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
 else:
     st.warning("Menunggu input ticker yang valid...")
