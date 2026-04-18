@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V8", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V9", layout="wide")
 
 st.markdown("""
     <style>
@@ -32,12 +32,17 @@ st.markdown("""
         border: 1px solid #333333;
         margin-top: 2px;
     }
-    
-    /* PERBAIKAN: Mengecilkan ukuran tombol di dalam menu pengaturan agar presisi */
     .stButton>button {
         padding: 2px 5px;
         font-size: 12px;
         height: 32px;
+    }
+    /* GAYA BARU UNTUK CATATAN KECIL */
+    .catatan-kecil {
+        font-size: 12px;
+        color: #888888;
+        margin-top: -12px;
+        font-style: italic;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -48,17 +53,14 @@ if 'num_assets' not in st.session_state:
     st.session_state.num_assets = 3 
 
 # 2. Panel Input Samping
-# PERBAIKAN 2: Menggunakan st.sidebar.header bawaan agar font size persis sama
 st.sidebar.header("Konfigurasi Portofolio")
 capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0)
 capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0)
 benchmark_ticker = st.sidebar.text_input("Benchmark", value="SPY").upper()
 
 st.sidebar.markdown("---")
-# PERBAIKAN 2: Menggunakan format header yang sama
 st.sidebar.header("Aset & Alokasi Sistem")
 
-# PERBAIKAN 1: Menyatukan pengaturan ke dalam menu Expandable (Ikon Gerigi)
 with st.sidebar.expander("⚙️ Pengaturan Aset", expanded=False):
     c1, c2 = st.columns(2)
     with c1:
@@ -69,11 +71,8 @@ with st.sidebar.expander("⚙️ Pengaturan Aset", expanded=False):
             if st.session_state.num_assets > 1:
                 st.session_state.num_assets -= 1
     
-    # Tombol SAVE sebagai penegas visual urutan telah fix
     if st.button("💾 Simpan Urutan", use_container_width=True):
         st.success("Tersimpan!")
-
-# PERBAIKAN 3: Header "Nama Aset" dan "Bobot Wajib" dihilangkan untuk kesan minimalis
 
 assets = []
 weights = []
@@ -97,7 +96,6 @@ for i in range(st.session_state.num_assets):
         
     col_a, col_w = container.columns([2, 1.5])
     with col_a:
-        # Input langsung tanpa label
         t = st.text_input(f"t{i}", value=default_val, key=f"t_{i}", label_visibility="collapsed").upper()
     with col_w:
         st.markdown(f"<div class='locked-weight'>{ref_w}% 🔒</div>", unsafe_allow_html=True)
@@ -131,18 +129,52 @@ if not data.empty and all(a in data.columns for a in assets):
     
     roll_max = port_cum.cummax()
     drawdown = (port_cum / roll_max) - 1
+    max_dd = drawdown.min()
     
     curr_val = port_cum.iloc[-1]
     sharpe = ((port_returns.mean() - (0.04/252)) / port_returns.std()) * np.sqrt(252)
     alpha = (port_returns.mean() * 252) - (0.04 + (port_returns.cov(bench_returns)/bench_returns.var()) * ((bench_returns.mean() * 252) - 0.04))
+    alpha_pct = alpha * 100
 
-    # 4. Tampilan Dasbor
+    # 4. LOGIKA ATURAN BAKU (CATATAN KECIL)
+    # Sharpe Note
+    if sharpe < 1.0:
+        note_sharpe = "Sedang (< 1.0)"
+    elif sharpe <= 1.5:
+        note_sharpe = "Baik (1.0 - 1.5)"
+    else:
+        note_sharpe = "Bagus (> 1.5)"
+
+    # Alpha Note
+    if alpha_pct < 0:
+        note_alpha = "Kurang (< 0%)"
+    elif alpha_pct <= 5.0:
+        note_alpha = "Normal (0 - 5%)"
+    else:
+        note_alpha = "Bagus (> 5%)"
+
+    # Drawdown Note
+    if max_dd >= -0.15:
+        note_dd = "Normal (0% s.d -15%)"
+    elif max_dd >= -0.30:
+        note_dd = "Medium (-15% s.d -30%)"
+    else:
+        note_dd = "Ekstrem (< -30%)"
+
+    # 5. Tampilan Dasbor
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
+    
     m1.metric("Nilai Portofolio", f"${curr_val:.2f}", f"Target: ${capital_target}")
+    
     m2.metric("Sharpe Ratio", f"{sharpe:.2f}")
-    m3.metric("Alpha", f"{alpha*100:.1f}%")
-    m4.metric("Max Drawdown", f"{drawdown.min()*100:.2f}%")
+    m2.markdown(f"<p class='catatan-kecil'>Skor: {note_sharpe}</p>", unsafe_allow_html=True)
+    
+    m3.metric("Alpha", f"{alpha_pct:.1f}%")
+    m3.markdown(f"<p class='catatan-kecil'>Kategori: {note_alpha}</p>", unsafe_allow_html=True)
+    
+    m4.metric("Max Drawdown", f"{max_dd*100:.2f}%")
+    m4.markdown(f"<p class='catatan-kecil'>Risiko: {note_dd}</p>", unsafe_allow_html=True)
 
     st.markdown("---")
     c1, c2 = st.columns(2)
