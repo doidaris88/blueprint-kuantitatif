@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V7", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V8", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,12 +22,6 @@ st.markdown("""
         margin-bottom: 20px;
         letter-spacing: -0.5px;
     }
-    .col-header {
-        font-size: 13px;
-        font-weight: bold;
-        color: #888888;
-        margin-bottom: 0px;
-    }
     .locked-weight {
         background-color: #1e2130;
         padding: 8px 10px;
@@ -38,41 +32,48 @@ st.markdown("""
         border: 1px solid #333333;
         margin-top: 2px;
     }
+    
+    /* PERBAIKAN: Mengecilkan ukuran tombol di dalam menu pengaturan agar presisi */
     .stButton>button {
-        padding: 2px 10px;
+        padding: 2px 5px;
         font-size: 12px;
+        height: 32px;
     }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy Nexus</p>', unsafe_allow_html=True)
 
-# MANAJEMEN STATE UNTUK JUMLAH ASET
 if 'num_assets' not in st.session_state:
     st.session_state.num_assets = 3 
 
 # 2. Panel Input Samping
+# PERBAIKAN 2: Menggunakan st.sidebar.header bawaan agar font size persis sama
 st.sidebar.header("Konfigurasi Portofolio")
 capital_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0)
 capital_target = st.sidebar.number_input("Target Capital Gain", value=100.0)
 benchmark_ticker = st.sidebar.text_input("Benchmark", value="SPY").upper()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Aset & Alokasi Sistem</p>', unsafe_allow_html=True)
+# PERBAIKAN 2: Menggunakan format header yang sama
+st.sidebar.header("Aset & Alokasi Sistem")
 
-# TOMBOL TAMBAH & HAPUS (UKURAN KECIL)
-col_btn1, col_btn2 = st.sidebar.columns([1, 1])
-with col_btn1:
-    if st.button("+ Tambah"):
-        st.session_state.num_assets += 1
-with col_btn2:
-    if st.button("- Hapus"):
-        if st.session_state.num_assets > 1:
-            st.session_state.num_assets -= 1
+# PERBAIKAN 1: Menyatukan pengaturan ke dalam menu Expandable (Ikon Gerigi)
+with st.sidebar.expander("⚙️ Pengaturan Aset", expanded=False):
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("➕ Tambah"):
+            st.session_state.num_assets += 1
+    with c2:
+        if st.button("➖ Hapus"):
+            if st.session_state.num_assets > 1:
+                st.session_state.num_assets -= 1
+    
+    # Tombol SAVE sebagai penegas visual urutan telah fix
+    if st.button("💾 Simpan Urutan", use_container_width=True):
+        st.success("Tersimpan!")
 
-h1, h2 = st.sidebar.columns([2, 1.5])
-h1.markdown('<p class="col-header">Nama Aset</p>', unsafe_allow_html=True)
-h2.markdown('<p class="col-header">Bobot Wajib</p>', unsafe_allow_html=True)
+# PERBAIKAN 3: Header "Nama Aset" dan "Bobot Wajib" dihilangkan untuk kesan minimalis
 
 assets = []
 weights = []
@@ -96,6 +97,7 @@ for i in range(st.session_state.num_assets):
         
     col_a, col_w = container.columns([2, 1.5])
     with col_a:
+        # Input langsung tanpa label
         t = st.text_input(f"t{i}", value=default_val, key=f"t_{i}", label_visibility="collapsed").upper()
     with col_w:
         st.markdown(f"<div class='locked-weight'>{ref_w}% 🔒</div>", unsafe_allow_html=True)
@@ -127,11 +129,9 @@ if not data.empty and all(a in data.columns for a in assets):
     port_cum = (1 + port_returns).cumprod() * capital_base
     bench_cum = (1 + bench_returns).cumprod() * capital_base
     
-    # Drawdown
     roll_max = port_cum.cummax()
     drawdown = (port_cum / roll_max) - 1
     
-    # Metrik
     curr_val = port_cum.iloc[-1]
     sharpe = ((port_returns.mean() - (0.04/252)) / port_returns.std()) * np.sqrt(252)
     alpha = (port_returns.mean() * 252) - (0.04 + (port_returns.cov(bench_returns)/bench_returns.var()) * ((bench_returns.mean() * 252) - 0.04))
@@ -147,7 +147,7 @@ if not data.empty and all(a in data.columns for a in assets):
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Kurva Ekuitas")
+        st.subheader("Kurva Ekuitas vs Benchmark")
         fig1 = go.Figure()
         fig1.add_trace(go.Scatter(x=port_cum.index, y=port_cum, name='Portofolio', line=dict(color='#00FFCC', width=2)))
         fig1.add_trace(go.Scatter(x=bench_cum.index, y=bench_cum, name='Benchmark', line=dict(color='#666666', width=1)))
