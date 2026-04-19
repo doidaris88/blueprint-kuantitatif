@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V20", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V21", layout="wide")
 
 st.markdown("""
     <style>
@@ -33,27 +33,18 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* CSS untuk menghilangkan kotak pada tombol slider agar murni simbol */
-    div[data-testid="stHorizontalBlock"] .stButton > button {
-        border: none !important;
-        background-color: transparent !important;
-        box-shadow: none !important;
-        color: #555555 !important;
-        font-size: 20px !important;
-        padding: 0px !important;
-        margin-top: 10px !important;
-    }
-
     /* Mempertegas Judul Menu Kluster */
     .cluster-header {
-        font-size: 20px !important;
+        font-size: 18px !important;
         font-weight: 900 !important;
-        color: #222222;
         letter-spacing: 0.5px;
         margin-top: 20px;
         margin-bottom: 5px;
+        border-bottom: 2px solid rgba(128, 128, 128, 0.2);
+        padding-bottom: 5px;
     }
 
+    /* Menghilangkan tombol Spin (-+) pada input angka */
     input::-webkit-outer-spin-button,
     input::-webkit-inner-spin-button {
         -webkit-appearance: none;
@@ -78,36 +69,13 @@ if 'assets_data' not in st.session_state:
 
 # 3. Sidebar: Kontrol Modal Dasar
 st.sidebar.header("Konfigurasi Portofolio")
-cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0)
-cap_target = st.sidebar.number_input("Target Capital Gain", value=100.0)
+cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, step=1.0)
+cap_target = st.sidebar.number_input("Target Capital Gain", value=100.0, step=1.0)
 bench_ticker = st.sidebar.text_input("Benchmark", value="SPY").strip().upper()
 
 st.sidebar.markdown("---")
 
-# 4. Sidebar: Target Alokasi Kluster (Format: - Slider +)
-st.sidebar.header("⚖️ Target Alokasi Kluster (%)")
-
-def symbol_slider(label, key, min_v, max_v):
-    st.sidebar.markdown(f"<p style='font-size:13px; font-weight:bold; margin-bottom:-10px; color:#666666;'>{label}</p>", unsafe_allow_html=True)
-    c1, c2, c3 = st.sidebar.columns([1, 8, 1])
-    with c1:
-        if st.button("−", key=f"m_{key}"):
-            if st.session_state[key] > min_v: st.session_state[key] -= 1
-    with c2:
-        st.slider(label, min_v, max_v, key=key, label_visibility="collapsed")
-    with c3:
-        if st.button("+", key=f"p_{key}"):
-            if st.session_state[key] < max_v: st.session_state[key] += 1
-
-symbol_slider("1. Growth Engine", "s_growth", 10, 85)
-symbol_slider("2. Tactical Support", "s_tactical", 5, 40)
-symbol_slider("3. Hedging & Defense", "s_hedging", 5, 40)
-
-total_check = st.session_state.s_growth + st.session_state.s_tactical + st.session_state.s_hedging
-if total_check != 100:
-    st.sidebar.error(f"⚠️ Total: {total_check}% (Harus 100%)")
-
-# 5. Fungsi Hierarki Internal Kluster
+# 4. Fungsi Hierarki Internal Kluster
 def get_cluster_weights(assets, cluster_total):
     n = len(assets)
     if n == 0: return []
@@ -116,26 +84,29 @@ def get_cluster_weights(assets, cluster_total):
     norm = np.array(raw) / sum(raw)
     return [round(val * cluster_total, 1) for val in norm]
 
-# 6. Sidebar: Area Input Aset (Desain Menu Besar + Gerigi)
+# 5. Sidebar: Area Input Terpusat (Kluster + Alokasi + Aset)
 final_assets = []
 final_weights = []
 
-def render_cluster_ui(name, display_name, color, state_key):
-    # Header Kluster (Tanpa expander)
-    st.sidebar.markdown(f'<p class="cluster-header">{display_name.upper()}</p>', unsafe_allow_html=True)
+def render_unified_cluster(name, display_name, color, state_key):
+    # Header Kluster
+    st.sidebar.markdown(f'<p class="cluster-header" style="color: {color};">{display_name.upper()}</p>', unsafe_allow_html=True)
+    
+    # Input Alokasi (Format persis seperti Konfigurasi Portofolio)
+    st.sidebar.number_input(f"Target Alokasi (%)", min_value=0, max_value=100, step=1, key=state_key)
     
     # Menu Pengaturan Gerigi (Dropdown untuk Aset & Tombol)
-    with st.sidebar.expander(f"⚙️ Pengaturan {display_name}", expanded=False):
+    with st.sidebar.expander(f"⚙️ Pengaturan Aset", expanded=False):
         current_assets = st.session_state.assets_data[name]
         c_weight_limit = st.session_state[state_key]
         w_list = get_cluster_weights(current_assets, c_weight_limit)
 
         # Tombol Tambah/Hapus di dalam dropdown
         col_t1, col_t2 = st.columns(2)
-        if col_t1.button(f"➕ Aset", key=f"add_{name}", use_container_width=True):
+        if col_t1.button(f"➕ Tambah", key=f"add_{name}", use_container_width=True):
             st.session_state.assets_data[name].append("")
             st.rerun()
-        if col_t2.button(f"➖ Aset", key=f"del_{name}", use_container_width=True):
+        if col_t2.button(f"➖ Hapus", key=f"del_{name}", use_container_width=True):
             if len(current_assets) > 1:
                 st.session_state.assets_data[name].pop()
                 st.rerun()
@@ -154,14 +125,22 @@ def render_cluster_ui(name, display_name, color, state_key):
                 final_assets.append(new_val)
                 final_weights.append(w_list[idx])
 
-render_cluster_ui('Growth', 'Growth Engine', '#0088ff', 's_growth')
-render_cluster_ui('Tactical', 'Tactical Support', '#ffaa00', 's_tactical')
-render_cluster_ui('Hedging', 'Hedging & Defense', '#00cc66', 's_hedging')
+# Render ke-3 Kluster Utama
+render_unified_cluster('Growth', 'Growth Engine', '#0088ff', 's_growth')
+render_unified_cluster('Tactical', 'Tactical Support', '#ffaa00', 's_tactical')
+render_unified_cluster('Hedging', 'Hedging & Defense', '#00cc66', 's_hedging')
 
-if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
-    st.sidebar.success("Blueprint Locked!")
+st.sidebar.markdown("---")
 
-# 7. Komputasi Data Utama
+# Validasi Total Alokasi 100%
+total_check = st.session_state.s_growth + st.session_state.s_tactical + st.session_state.s_hedging
+if total_check != 100:
+    st.sidebar.error(f"⚠️ Total Alokasi Kluster saat ini {total_check}%. Wajib 100%!")
+else:
+    if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
+        st.sidebar.success("Blueprint Locked!")
+
+# 6. Komputasi Data Utama
 @st.cache_data(ttl=3600)
 def fetch_data(tickers, benchmark):
     all_t = list(set([t for t in tickers if t] + [benchmark]))
@@ -203,7 +182,7 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
                 <div style="font-size: 11px; color: #999999; margin-top: 12px; border-top: 1px solid #f0f0f0; padding-top: 8px;">{legend}</div>
             </div>"""
 
-        # 8. Render Dasbor Dasbor Utama
+        # 7. Render Dasbor Dasbor Utama
         st.markdown("---")
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.markdown(kpi_box("Current Value vs Target", f"${p_cum.iloc[-1]:.2f}", "🎯 Target", f"Basis: ${cap_base:.0f} → Target: ${cap_target:.0f}"), unsafe_allow_html=True)
