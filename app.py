@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI (Putih Bersih)
-st.set_page_config(page_title="Growth Blueprint V15", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V16", layout="wide")
 
 st.markdown("""
     <style>
@@ -73,12 +73,12 @@ assets = []
 weights = []
 defaults = ["NVDA", "VST", "PLTR", "GLD", "BTC", "TSM", "AMD"]
 
+# PERBAIKAN MATEMATIKA: Decay Rate diubah dari 0.7 menjadi 0.45 agar aset puncak tembus 60%
 def get_ref_weight(index, total):
-    decay = 0.7 ** index
-    raw_weights = [0.7 ** i for i in range(total)]
+    decay = 0.45 ** index
+    raw_weights = [0.45 ** i for i in range(total)]
     return round((decay / sum(raw_weights)) * 100, 1)
 
-# PERBAIKAN 1: Eksekusi 3 Aset Utama terlebih dahulu (Posisi di atas)
 for i in range(min(3, st.session_state.num_assets)):
     ref_w = get_ref_weight(i, st.session_state.num_assets)
     def_val = defaults[i] if i < len(defaults) else ""
@@ -92,7 +92,6 @@ for i in range(min(3, st.session_state.num_assets)):
         assets.append(t)
         weights.append(ref_w)
 
-# PERBAIKAN 1 Lanjutan: Menu "Aset Tambahan" diletakkan mutlak di bawah 3 aset utama
 if st.session_state.num_assets > 3:
     with st.sidebar.expander("⬇️ Aset Tambahan", expanded=False):
         for i in range(3, st.session_state.num_assets):
@@ -120,15 +119,13 @@ def fetch_data(tickers, benchmark):
 
 df = fetch_data(assets, bench_ticker)
 
-# PERBAIKAN 2: Penyelarasan data yang lebih kuat agar S&P 500 tidak hilang
 if not df.empty and all(a in df.columns for a in assets) and bench_ticker in df.columns:
-    # Memotong baris hanya jika ada data yang kosong di kombinasi aset + benchmark ini
     df_clean = df[assets + [bench_ticker]].dropna()
     
     if not df_clean.empty:
         rets = df_clean.pct_change().dropna()
         w_norm = np.array(weights) / 100
-        w_norm = w_norm / w_norm.sum() # Memastikan total bobot pas 100%
+        w_norm = w_norm / w_norm.sum() 
         
         p_ret = rets[assets].dot(w_norm)
         b_ret = rets[bench_ticker]
@@ -177,7 +174,6 @@ if not df.empty and all(a in df.columns for a in assets) and bench_ticker in df.
             st.subheader("Equity Curve")
             f1 = go.Figure()
             f1.add_trace(go.Scatter(x=p_cum.index, y=p_cum, name='Portfolio', line=dict(color='#0088ff', width=2.5)))
-            # PERBAIKAN 3: Warna S&P dipergelap (#333333) agar terlihat sangat jelas
             f1.add_trace(go.Scatter(x=b_cum.index, y=b_cum, name=f'Benchmark ({bench_ticker})', line=dict(color='#333333', width=2)))
             f1.add_hline(y=cap_target, line_dash="dot", line_color="#ff4b4b")
             f1.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True), template="simple_white", legend=dict(orientation="h", y=1.1, x=0))
