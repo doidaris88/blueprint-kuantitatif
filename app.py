@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V22", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V23", layout="wide")
 
 st.markdown("""
     <style>
@@ -33,11 +33,16 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* Menghilangkan tombol Spin (-+) pada input angka bawaan */
+    /* Menghilangkan tombol Spin (-+) bawaan pada kotak input angka */
     input::-webkit-outer-spin-button,
     input::-webkit-inner-spin-button {
         -webkit-appearance: none;
         margin: 0;
+    }
+
+    /* Merapikan tinggi tombol agar sejajar presisi dengan kotak input */
+    .stButton>button {
+        height: 39px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -78,27 +83,27 @@ final_assets = []
 final_weights = []
 
 def render_open_cluster(name, display_name, state_key):
-    # Header Kluster (Format dan ukuran sama persis dengan 'Konfigurasi Portofolio')
+    # Header Kluster (Gaya sama persis dengan 'Konfigurasi Portofolio')
     st.sidebar.header(display_name)
     
-    # Baris 1: Alokasi % | Tombol Tambah Aset | Tombol Hapus Aset
-    col_alloc, col_add, col_del = st.sidebar.columns([2.5, 1, 1])
-    with col_alloc:
-        st.number_input("Target Alokasi (%)", min_value=0, max_value=100, step=1, key=state_key)
-    with col_add:
-        # Margin-top digunakan agar tombol sejajar dengan kotak input (mengakali tinggi label tulisan)
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        if st.button("➕", key=f"add_{name}", use_container_width=True, help="Tambah Aset"):
-            st.session_state.assets_data[name].append("")
-            st.rerun()
-    with col_del:
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+    # Label manual agar bisa mengontrol posisi kolom di bawahnya
+    st.sidebar.markdown("<p style='font-size:13px; color:#555555; margin-bottom:5px;'>Target Alokasi (%) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Aset (- / +)</p>", unsafe_allow_html=True)
+    
+    # Baris 1: Alokasi % | Tombol Hapus | Tombol Tambah (Terlihat seperti menyatu)
+    c_alloc, c_min, c_plus = st.sidebar.columns([2.5, 1, 1])
+    with c_alloc:
+        st.number_input(f"alloc_{name}", min_value=0, max_value=100, step=1, key=state_key, label_visibility="collapsed")
+    with c_min:
         if st.button("➖", key=f"del_{name}", use_container_width=True, help="Hapus Aset Bawah"):
             if len(st.session_state.assets_data[name]) > 1:
                 st.session_state.assets_data[name].pop()
                 st.rerun()
+    with c_plus:
+        if st.button("➕", key=f"add_{name}", use_container_width=True, help="Tambah Aset"):
+            st.session_state.assets_data[name].append("")
+            st.rerun()
     
-    # Baris 2: List Aset Langsung Muncul di Bawahnya (Tanpa Menu Pengaturan)
+    # Baris 2: List Aset Langsung Muncul di Bawahnya
     current_assets = st.session_state.assets_data[name]
     c_weight_limit = st.session_state[state_key]
     w_list = get_cluster_weights(current_assets, c_weight_limit)
@@ -116,7 +121,7 @@ def render_open_cluster(name, display_name, state_key):
             
     st.sidebar.markdown("---")
 
-# Render ke-3 Kluster Utama secara Terbuka
+# Render ke-3 Kluster Utama
 render_open_cluster('Growth', 'Growth Engine', 's_growth')
 render_open_cluster('Tactical', 'Tactical Support', 's_tactical')
 render_open_cluster('Hedging', 'Hedging & Defense', 's_hedging')
