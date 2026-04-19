@@ -47,8 +47,8 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] {
-        width: 275px !important;
-        min-width: 275px !important;
+        width: 250px !important;
+        min-width: 250px !important;
     }
 
     .locked-weight {
