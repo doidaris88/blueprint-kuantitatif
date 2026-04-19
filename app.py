@@ -123,7 +123,7 @@ if not df.empty and all(a in df.columns for a in assets):
     # 4. Kategori Skor (Emoji & Deskripsi)
     s_note = "🔵 Baik" if sharpe > 1.5 else "🟡 Sedang" if sharpe >= 1.0 else "🔴 Kurang"
     a_note = "🔵 Baik" if alpha*100 > 5 else "🟡 Sedang" if alpha*100 >= 0 else "🔴 Kurang"
-    d_note = "🔵 Baik" if dd.min() >= -0.15 else "🟡 Sedang" if dd.min() >= -0.30 else "🔴 Kurang"
+    d_note = "🔵 Aman" if dd.min() >= -0.15 else "🟡 Ideal" if dd.min() >= -0.30 else "🔴 Warning"
 
     # FUNGSI KPI CARD (Sesuai Gambar User)
     def kpi_box(label, val, status, legend):
