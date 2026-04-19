@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V21", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V22", layout="wide")
 
 st.markdown("""
     <style>
@@ -33,18 +33,7 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* Mempertegas Judul Menu Kluster */
-    .cluster-header {
-        font-size: 18px !important;
-        font-weight: 900 !important;
-        letter-spacing: 0.5px;
-        margin-top: 20px;
-        margin-bottom: 5px;
-        border-bottom: 2px solid rgba(128, 128, 128, 0.2);
-        padding-bottom: 5px;
-    }
-
-    /* Menghilangkan tombol Spin (-+) pada input angka */
+    /* Menghilangkan tombol Spin (-+) pada input angka bawaan */
     input::-webkit-outer-spin-button,
     input::-webkit-inner-spin-button {
         -webkit-appearance: none;
@@ -84,53 +73,53 @@ def get_cluster_weights(assets, cluster_total):
     norm = np.array(raw) / sum(raw)
     return [round(val * cluster_total, 1) for val in norm]
 
-# 5. Sidebar: Area Input Terpusat (Kluster + Alokasi + Aset)
+# 5. Sidebar: Area Input Terpusat & Terbuka
 final_assets = []
 final_weights = []
 
-def render_unified_cluster(name, display_name, color, state_key):
-    # Header Kluster
-    st.sidebar.markdown(f'<p class="cluster-header" style="color: {color};">{display_name.upper()}</p>', unsafe_allow_html=True)
+def render_open_cluster(name, display_name, state_key):
+    # Header Kluster (Format dan ukuran sama persis dengan 'Konfigurasi Portofolio')
+    st.sidebar.header(display_name)
     
-    # Input Alokasi (Format persis seperti Konfigurasi Portofolio)
-    st.sidebar.number_input(f"Target Alokasi (%)", min_value=0, max_value=100, step=1, key=state_key)
-    
-    # Menu Pengaturan Gerigi (Dropdown untuk Aset & Tombol)
-    with st.sidebar.expander(f"⚙️ Pengaturan Aset", expanded=False):
-        current_assets = st.session_state.assets_data[name]
-        c_weight_limit = st.session_state[state_key]
-        w_list = get_cluster_weights(current_assets, c_weight_limit)
-
-        # Tombol Tambah/Hapus di dalam dropdown
-        col_t1, col_t2 = st.columns(2)
-        if col_t1.button(f"➕ Tambah", key=f"add_{name}", use_container_width=True):
+    # Baris 1: Alokasi % | Tombol Tambah Aset | Tombol Hapus Aset
+    col_alloc, col_add, col_del = st.sidebar.columns([2.5, 1, 1])
+    with col_alloc:
+        st.number_input("Target Alokasi (%)", min_value=0, max_value=100, step=1, key=state_key)
+    with col_add:
+        # Margin-top digunakan agar tombol sejajar dengan kotak input (mengakali tinggi label tulisan)
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("➕", key=f"add_{name}", use_container_width=True, help="Tambah Aset"):
             st.session_state.assets_data[name].append("")
             st.rerun()
-        if col_t2.button(f"➖ Hapus", key=f"del_{name}", use_container_width=True):
-            if len(current_assets) > 1:
+    with col_del:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("➖", key=f"del_{name}", use_container_width=True, help="Hapus Aset Bawah"):
+            if len(st.session_state.assets_data[name]) > 1:
                 st.session_state.assets_data[name].pop()
                 st.rerun()
-        
-        st.markdown("---")
+    
+    # Baris 2: List Aset Langsung Muncul di Bawahnya (Tanpa Menu Pengaturan)
+    current_assets = st.session_state.assets_data[name]
+    c_weight_limit = st.session_state[state_key]
+    w_list = get_cluster_weights(current_assets, c_weight_limit)
 
-        # List Aset di dalam dropdown
-        for idx, asset in enumerate(current_assets):
-            col_a, col_w = st.columns([2, 1.5])
-            with col_a:
-                new_val = st.text_input(f"t_{name}_{idx}", value=asset, key=f"in_{name}_{idx}", label_visibility="collapsed").strip().upper()
-                st.session_state.assets_data[name][idx] = new_val
-            with col_w:
-                st.markdown(f"<div class='locked-weight'>{w_list[idx]}% 🔒</div>", unsafe_allow_html=True)
-            if new_val:
-                final_assets.append(new_val)
-                final_weights.append(w_list[idx])
+    for idx, asset in enumerate(current_assets):
+        col_a, col_w = st.sidebar.columns([2, 1.5])
+        with col_a:
+            new_val = st.text_input(f"t_{name}_{idx}", value=asset, key=f"in_{name}_{idx}", label_visibility="collapsed").strip().upper()
+            st.session_state.assets_data[name][idx] = new_val
+        with col_w:
+            st.markdown(f"<div class='locked-weight'>{w_list[idx]}% 🔒</div>", unsafe_allow_html=True)
+        if new_val:
+            final_assets.append(new_val)
+            final_weights.append(w_list[idx])
+            
+    st.sidebar.markdown("---")
 
-# Render ke-3 Kluster Utama
-render_unified_cluster('Growth', 'Growth Engine', '#0088ff', 's_growth')
-render_unified_cluster('Tactical', 'Tactical Support', '#ffaa00', 's_tactical')
-render_unified_cluster('Hedging', 'Hedging & Defense', '#00cc66', 's_hedging')
-
-st.sidebar.markdown("---")
+# Render ke-3 Kluster Utama secara Terbuka
+render_open_cluster('Growth', 'Growth Engine', 's_growth')
+render_open_cluster('Tactical', 'Tactical Support', 's_tactical')
+render_open_cluster('Hedging', 'Hedging & Defense', 's_hedging')
 
 # Validasi Total Alokasi 100%
 total_check = st.session_state.s_growth + st.session_state.s_tactical + st.session_state.s_hedging
@@ -207,4 +196,4 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
             fig2.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'), template="simple_white")
             st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
-    st.info("Atur Ticker di Menu Pengaturan (⚙️) untuk memulai.")
+    st.info("Lengkapi nama saham di tiap kluster untuk memulai kalkulasi.")
