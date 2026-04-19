@@ -6,37 +6,29 @@ import plotly.graph_objects as go
 import json
 import os
 
-# --- PERSISTENCE LAYER (ANTI-REFRESH) ---
-# Sistem ini akan membaca file fisik, bukan hanya memori RAM
+# --- PERSISTENCE LAYER (DATA TETAP AMAN) ---
 CONFIG_FILE = "config.json"
 
 def load_config():
-    """Mengambil data dari file saat aplikasi pertama kali dijalankan"""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
-            # Masukkan data file ke dalam session_state
             for key, value in data.items():
                 st.session_state[key] = value
 
 def save_config():
-    """Menyimpan data session ke dalam file fisik saat tombol SAVE ditekan"""
     data = {
         's_growth': st.session_state.s_growth,
         's_tactical': st.session_state.s_tactical,
         's_hedging': st.session_state.s_hedging,
-        'assets_data': st.session_state.assets_data,
-        'cap_base': st.session_state.get('cap_base', 65.0),
-        'cap_target': st.session_state.get('cap_target', 100.0),
-        'bench_ticker': st.session_state.get('bench_ticker', 'SPY')
+        'assets_data': st.session_state.assets_data
     }
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f)
 
-# 1. Konfigurasi Halaman
+# 1. Konfigurasi Halaman & UI Clean
 st.set_page_config(page_title="Growth Blueprint V27", layout="wide")
 
-# Jalankan Load Data hanya sekali saat aplikasi pertama kali dibuka
 if 'config_loaded' not in st.session_state:
     load_config()
     st.session_state.config_loaded = True
@@ -47,12 +39,6 @@ st.markdown("""
     footer {visibility: hidden;}
     input[type=text] { text-transform: uppercase; }
     
-    /* LEBAR SIDEBAR: Dikunci 275px untuk presisi teks */
-    section[data-testid="stSidebar"] {
-        width: 275px !important;
-        min-width: 275px !important;
-    }
-
     .main-title {
         font-size: 36px !important; 
         font-weight: bold;
@@ -60,6 +46,12 @@ st.markdown("""
         letter-spacing: -1px;
     }
     
+    /* LEBAR SIDEBAR: Dikunci 250px (2 spasi dari teks terpanjang) */
+    section[data-testid="stSidebar"] {
+        width: 250px !important;
+        min-width: 250px !important;
+    }
+
     .locked-weight {
         background-color: rgba(128, 128, 128, 0.05);
         padding: 8px 10px;
@@ -72,7 +64,7 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* MENGHILANGKAN TOMBOL SPINNER (+/-) BAWAAN */
+    /* MENGHILANGKAN TOMBOL (+/-) BAWAAN */
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button {
         -webkit-appearance: none !important;
@@ -80,7 +72,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Memaksa elemen horizontal tetap satu baris di HP */
+    /* Memaksa elemen agar tidak bertumpuk di HP */
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
     }
@@ -89,10 +81,11 @@ st.markdown("""
 
 st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy</p>', unsafe_allow_html=True)
 
-# 2. Inisialisasi State Default (jika file config belum ada)
+# 2. Inisialisasi State Default
 if 's_growth' not in st.session_state: st.session_state.s_growth = 65
 if 's_tactical' not in st.session_state: st.session_state.s_tactical = 20
 if 's_hedging' not in st.session_state: st.session_state.s_hedging = 15
+
 if 'assets_data' not in st.session_state:
     st.session_state.assets_data = {
         'Growth': ["NVDA", "VST", "PLTR"],
@@ -100,15 +93,14 @@ if 'assets_data' not in st.session_state:
         'Hedging': ["GLD", "BTC"]
     }
 
-# 3. Sidebar: Kontrol Modal
+# 3. Sidebar: Kontrol Utama
 st.sidebar.header("Konfigurasi Portofolio")
-cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=st.session_state.get('cap_base', 65.0), key="cap_base")
-cap_target = st.sidebar.number_input("Target Capital Gain", value=st.session_state.get('cap_target', 100.0), key="cap_target")
-bench_ticker = st.sidebar.text_input("Benchmark", value=st.session_state.get('bench_ticker', 'SPY'), key="bench_ticker").upper()
+cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, step=1.0)
+cap_target = st.sidebar.number_input("Target Capital Gain", value=100.0, step=1.0)
+bench_ticker = st.sidebar.text_input("Benchmark", value="SPY").strip().upper()
 
 st.sidebar.markdown("---")
 
-# 4. Rendering Kluster Terbuka
 def get_cluster_weights(assets, cluster_total):
     n = len(assets)
     if n == 0: return []
@@ -122,26 +114,27 @@ final_weights = []
 
 def render_cluster(name, display_name, state_key):
     st.sidebar.header(display_name)
-    st.sidebar.markdown("""
-    <div style='display: flex; justify-content: space-between; font-size: 11px; color: #555555; margin-bottom: 2px;'>
-        <div style='flex: 2.2;'>Alokasi (%)</div>
-        <div style='flex: 1.8; text-align: center;'>Aset (➖/➕)</div>
-    </div>
-    """, unsafe_allow_html=True)
     
-    c_alloc, c_min, c_plus = st.sidebar.columns([2.2, 0.9, 0.9])
+    # LOGIKA KUOTA OTOMATIS: Hitung sisa maksimal yang diizinkan
+    keys = ['s_growth', 's_tactical', 's_hedging']
+    other_keys = [k for k in keys if k != state_key]
+    current_others_sum = sum(st.session_state[k] for k in other_keys)
+    max_quota = 100 - current_others_sum
+    
+    st.sidebar.markdown(f"<p style='font-size:11px; color:#555555; margin-bottom:5px;'>Alokasi (Maks: {max_quota}%) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Aset (➖/➕)</p>", unsafe_allow_html=True)
+    
+    c_alloc, c_min, c_plus = st.sidebar.columns([2.5, 1, 1])
     with c_alloc:
-        st.number_input(f"alloc_{name}", min_value=0, max_value=100, step=1, key=state_key, label_visibility="collapsed")
+        # Menggunakan max_quota sebagai batas input
+        st.number_input(f"alloc_{name}", min_value=0, max_value=max_quota, step=1, key=state_key, label_visibility="collapsed")
     with c_min:
         if st.button("➖", key=f"del_{name}"):
             if len(st.session_state.assets_data[name]) > 1:
                 st.session_state.assets_data[name].pop()
-                save_config() # Auto-save saat struktur berubah
                 st.rerun()
     with c_plus:
         if st.button("➕", key=f"add_{name}"):
             st.session_state.assets_data[name].append("")
-            save_config() # Auto-save saat struktur berubah
             st.rerun()
     
     current_assets = st.session_state.assets_data[name]
@@ -164,12 +157,11 @@ render_cluster('Growth', 'Growth Engine', 's_growth')
 render_cluster('Tactical', 'Tactical Support', 's_tactical')
 render_cluster('Hedging', 'Hedging & Defense', 's_hedging')
 
-# TOMBOL SAVE: Sangat krusial untuk diklik sebelum refresh
 if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
     save_config()
     st.sidebar.success("Konfigurasi Terkunci!")
 
-# 5. Komputasi Data & Plotting
+# 4. Komputasi Data
 @st.cache_data(ttl=3600)
 def fetch_data(tickers, benchmark):
     all_t = list(set([t for t in tickers if t] + [benchmark]))
@@ -223,12 +215,14 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
             fig1.add_trace(go.Scatter(x=b_cum.index, y=b_cum, name='S&P 500', line=dict(color='#333333', width=2)))
             fig1.add_hline(y=cap_target, line_dash="dot", line_color="#ff4b4b")
             fig1.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), template="simple_white", legend=dict(orientation="h", y=1.1, x=0))
-            st.plotly_chart(fig1, use_container_width=True)
+            # PERBAIKAN: staticPlot: True agar tidak bergerak saat disentuh
+            st.plotly_chart(fig1, use_container_width=True, config={'staticPlot': True})
         with g2:
             st.subheader("Drawdown Map")
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(x=dd.index, y=dd, fill='tozeroy', line=dict(color='#ff4b4b', width=1)))
             fig2.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), template="simple_white")
-            st.plotly_chart(fig2, use_container_width=True)
+            # PERBAIKAN: staticPlot: True agar tidak bergerak saat disentuh
+            st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
-    st.info("Input valid Tickers to generate blueprint...")
+    st.info("Lengkapi nama saham di tiap kluster untuk memulai.")
