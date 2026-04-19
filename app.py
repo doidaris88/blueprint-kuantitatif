@@ -61,9 +61,9 @@ st.markdown("""
 
     /* 1. KUNCI LEBAR SIDEBAR (Tepat 2 spasi dari teks terpanjang) */
     section[data-testid="stSidebar"] {
-        width: 275px !important;
-        min-width: 275px !important;
-        max-width: 275px !important;
+        width: 250px !important;
+        min-width: 250px !important;
+        max-width: 250px !important;
     }
 
     /* 2. MENGHILANGKAN TOMBOL (+/-) BAWAAN KOTAK ANGKA */
