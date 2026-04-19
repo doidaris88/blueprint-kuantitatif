@@ -3,9 +3,35 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import json
+import os
+
+# --- PERSISTENCE LAYER (ANTI HILANG SAAT REFRESH) ---
+CONFIG_FILE = "config.json"
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+            for key, value in data.items():
+                st.session_state[key] = value
+
+def save_config():
+    data = {
+        's_growth': st.session_state.s_growth,
+        's_tactical': st.session_state.s_tactical,
+        's_hedging': st.session_state.s_hedging,
+        'assets_data': st.session_state.assets_data
+    }
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f)
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V24", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V26", layout="wide")
+
+if 'config_loaded' not in st.session_state:
+    load_config()
+    st.session_state.config_loaded = True
 
 st.markdown("""
     <style>
@@ -33,7 +59,14 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* 1. MENGHILANGKAN TOMBOL (+/-) BAWAAN KOTAK ANGKA SECARA TOTAL */
+    /* 1. KUNCI LEBAR SIDEBAR (Tepat 2 spasi dari teks terpanjang) */
+    section[data-testid="stSidebar"] {
+        width: 275px !important;
+        min-width: 275px !important;
+        max-width: 275px !important;
+    }
+
+    /* 2. MENGHILANGKAN TOMBOL (+/-) BAWAAN KOTAK ANGKA */
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button {
         -webkit-appearance: none !important;
@@ -44,7 +77,7 @@ st.markdown("""
         -moz-appearance: textfield !important;
     }
 
-    /* 2. MEMAKSA KOLOM SIDEBAR TETAP HORIZONTAL DI HP (TIDAK BERTUMPUK KE BAWAH) */
+    /* 3. Memaksa elemen agar tidak bertumpuk di HP */
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
         flex-direction: row !important;
@@ -53,7 +86,7 @@ st.markdown("""
         min-width: 0 !important; 
     }
 
-    /* 3. Merapikan tinggi tombol agar simetris dengan kotak input */
+    /* 4. Merapikan tombol */
     .stButton > button {
         height: 39px !important;
         padding: 0px !important;
@@ -83,7 +116,6 @@ bench_ticker = st.sidebar.text_input("Benchmark", value="SPY").strip().upper()
 
 st.sidebar.markdown("---")
 
-# 4. Fungsi Hierarki Internal Kluster
 def get_cluster_weights(assets, cluster_total):
     n = len(assets)
     if n == 0: return []
@@ -92,15 +124,11 @@ def get_cluster_weights(assets, cluster_total):
     norm = np.array(raw) / sum(raw)
     return [round(val * cluster_total, 1) for val in norm]
 
-# 5. Sidebar: Area Input Terpusat & Terbuka
 final_assets = []
 final_weights = []
 
 def render_open_cluster(name, display_name, state_key):
-    # Header Kluster (Sama persis dengan Konfigurasi Portofolio)
     st.sidebar.header(display_name)
-    
-    # Label Atas yang Presisi
     st.sidebar.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; color: #555555; margin-bottom: 2px;'>
         <div style='flex: 2.2;'>Target Alokasi (%)</div>
@@ -108,22 +136,20 @@ def render_open_cluster(name, display_name, state_key):
     </div>
     """, unsafe_allow_html=True)
     
-    # Baris 1: Dipecah 3 Kolom tapi dipaksa CSS tetap 1 baris di HP [ Input | - | + ]
     c_alloc, c_min, c_plus = st.sidebar.columns([2.2, 0.9, 0.9])
     
     with c_alloc:
         st.number_input(f"alloc_{name}", min_value=0, max_value=100, step=1, key=state_key, label_visibility="collapsed")
     with c_min:
-        if st.button("➖", key=f"del_{name}", use_container_width=True, help="Hapus Aset Bawah"):
+        if st.button("➖", key=f"del_{name}", use_container_width=True):
             if len(st.session_state.assets_data[name]) > 1:
                 st.session_state.assets_data[name].pop()
                 st.rerun()
     with c_plus:
-        if st.button("➕", key=f"add_{name}", use_container_width=True, help="Tambah Aset"):
+        if st.button("➕", key=f"add_{name}", use_container_width=True):
             st.session_state.assets_data[name].append("")
             st.rerun()
     
-    # Baris 2: List Aset Langsung Muncul di Bawahnya
     current_assets = st.session_state.assets_data[name]
     c_weight_limit = st.session_state[state_key]
     w_list = get_cluster_weights(current_assets, c_weight_limit)
@@ -141,20 +167,19 @@ def render_open_cluster(name, display_name, state_key):
             
     st.sidebar.markdown("---")
 
-# Render ke-3 Kluster Utama
 render_open_cluster('Growth', 'Growth Engine', 's_growth')
 render_open_cluster('Tactical', 'Tactical Support', 's_tactical')
 render_open_cluster('Hedging', 'Hedging & Defense', 's_hedging')
 
-# Validasi Total Alokasi 100%
 total_check = st.session_state.s_growth + st.session_state.s_tactical + st.session_state.s_hedging
 if total_check != 100:
-    st.sidebar.error(f"⚠️ Total Alokasi Kluster saat ini {total_check}%. Wajib 100%!")
+    st.sidebar.error(f"⚠️ Total Alokasi: {total_check}%. Wajib 100%!")
 else:
     if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
-        st.sidebar.success("Blueprint Locked!")
+        save_config()
+        st.sidebar.success("Blueprint Tersimpan!")
 
-# 6. Komputasi Data Utama
+# 4. Komputasi Data Utama
 @st.cache_data(ttl=3600)
 def fetch_data(tickers, benchmark):
     all_t = list(set([t for t in tickers if t] + [benchmark]))
@@ -196,7 +221,6 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
                 <div style="font-size: 11px; color: #999999; margin-top: 12px; border-top: 1px solid #f0f0f0; padding-top: 8px;">{legend}</div>
             </div>"""
 
-        # 7. Render Dasbor Dasbor Utama
         st.markdown("---")
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.markdown(kpi_box("Current Value vs Target", f"${p_cum.iloc[-1]:.2f}", "🎯 Target", f"Basis: ${cap_base:.0f} → Target: ${cap_target:.0f}"), unsafe_allow_html=True)
@@ -221,4 +245,4 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
             fig2.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'), template="simple_white")
             st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
 else:
-    st.info("Lengkapi nama saham di tiap kluster untuk memulai kalkulasi.")
+    st.info("Input valid Tickers to generate blueprint...")
