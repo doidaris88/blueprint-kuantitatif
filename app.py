@@ -6,29 +6,37 @@ import plotly.graph_objects as go
 import json
 import os
 
-# --- PERSISTENCE LAYER (ANTI HILANG SAAT REFRESH) ---
+# --- PERSISTENCE LAYER (ANTI-REFRESH) ---
+# Sistem ini akan membaca file fisik, bukan hanya memori RAM
 CONFIG_FILE = "config.json"
 
 def load_config():
+    """Mengambil data dari file saat aplikasi pertama kali dijalankan"""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
+            # Masukkan data file ke dalam session_state
             for key, value in data.items():
                 st.session_state[key] = value
 
 def save_config():
+    """Menyimpan data session ke dalam file fisik saat tombol SAVE ditekan"""
     data = {
         's_growth': st.session_state.s_growth,
         's_tactical': st.session_state.s_tactical,
         's_hedging': st.session_state.s_hedging,
-        'assets_data': st.session_state.assets_data
+        'assets_data': st.session_state.assets_data,
+        'cap_base': st.session_state.get('cap_base', 65.0),
+        'cap_target': st.session_state.get('cap_target', 100.0),
+        'bench_ticker': st.session_state.get('bench_ticker', 'SPY')
     }
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f)
 
-# 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V26", layout="wide")
+# 1. Konfigurasi Halaman
+st.set_page_config(page_title="Growth Blueprint V27", layout="wide")
 
+# Jalankan Load Data hanya sekali saat aplikasi pertama kali dibuka
 if 'config_loaded' not in st.session_state:
     load_config()
     st.session_state.config_loaded = True
@@ -39,12 +47,17 @@ st.markdown("""
     footer {visibility: hidden;}
     input[type=text] { text-transform: uppercase; }
     
+    /* LEBAR SIDEBAR: Dikunci 275px untuk presisi teks */
+    section[data-testid="stSidebar"] {
+        width: 275px !important;
+        min-width: 275px !important;
+    }
+
     .main-title {
         font-size: 36px !important; 
         font-weight: bold;
         margin-bottom: 25px;
         letter-spacing: -1px;
-        color: #111111;
     }
     
     .locked-weight {
@@ -59,48 +72,27 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* 1. KUNCI LEBAR SIDEBAR (Tepat 2 spasi dari teks terpanjang) */
-    section[data-testid="stSidebar"] {
-        width: 250px !important;
-        min-width: 250px !important;
-        max-width: 250px !important;
-    }
-
-    /* 2. MENGHILANGKAN TOMBOL (+/-) BAWAAN KOTAK ANGKA */
+    /* MENGHILANGKAN TOMBOL SPINNER (+/-) BAWAAN */
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button {
         -webkit-appearance: none !important;
         margin: 0 !important;
         display: none !important;
     }
-    input[type="number"] {
-        -moz-appearance: textfield !important;
-    }
 
-    /* 3. Memaksa elemen agar tidak bertumpuk di HP */
+    /* Memaksa elemen horizontal tetap satu baris di HP */
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
-        flex-direction: row !important;
-    }
-    section[data-testid="stSidebar"] div[data-testid="column"] {
-        min-width: 0 !important; 
-    }
-
-    /* 4. Merapikan tombol */
-    .stButton > button {
-        height: 39px !important;
-        padding: 0px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">📈 Maximum Growth Blueprint: AI-Energy</p>', unsafe_allow_html=True)
 
-# 2. State Manajemen
+# 2. Inisialisasi State Default (jika file config belum ada)
 if 's_growth' not in st.session_state: st.session_state.s_growth = 65
 if 's_tactical' not in st.session_state: st.session_state.s_tactical = 20
 if 's_hedging' not in st.session_state: st.session_state.s_hedging = 15
-
 if 'assets_data' not in st.session_state:
     st.session_state.assets_data = {
         'Growth': ["NVDA", "VST", "PLTR"],
@@ -108,14 +100,15 @@ if 'assets_data' not in st.session_state:
         'Hedging': ["GLD", "BTC"]
     }
 
-# 3. Sidebar: Kontrol Modal Dasar
+# 3. Sidebar: Kontrol Modal
 st.sidebar.header("Konfigurasi Portofolio")
-cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=65.0, step=1.0)
-cap_target = st.sidebar.number_input("Target Capital Gain", value=100.0, step=1.0)
-bench_ticker = st.sidebar.text_input("Benchmark", value="SPY").strip().upper()
+cap_base = st.sidebar.number_input("Modal Awal (Basis)", value=st.session_state.get('cap_base', 65.0), key="cap_base")
+cap_target = st.sidebar.number_input("Target Capital Gain", value=st.session_state.get('cap_target', 100.0), key="cap_target")
+bench_ticker = st.sidebar.text_input("Benchmark", value=st.session_state.get('bench_ticker', 'SPY'), key="bench_ticker").upper()
 
 st.sidebar.markdown("---")
 
+# 4. Rendering Kluster Terbuka
 def get_cluster_weights(assets, cluster_total):
     n = len(assets)
     if n == 0: return []
@@ -127,27 +120,28 @@ def get_cluster_weights(assets, cluster_total):
 final_assets = []
 final_weights = []
 
-def render_open_cluster(name, display_name, state_key):
+def render_cluster(name, display_name, state_key):
     st.sidebar.header(display_name)
     st.sidebar.markdown("""
-    <div style='display: flex; justify-content: space-between; font-size: 13px; color: #555555; margin-bottom: 2px;'>
-        <div style='flex: 2.2;'>Target Alokasi (%)</div>
-        <div style='flex: 1.8; text-align: center;'>Aset (➖ / ➕)</div>
+    <div style='display: flex; justify-content: space-between; font-size: 11px; color: #555555; margin-bottom: 2px;'>
+        <div style='flex: 2.2;'>Alokasi (%)</div>
+        <div style='flex: 1.8; text-align: center;'>Aset (➖/➕)</div>
     </div>
     """, unsafe_allow_html=True)
     
     c_alloc, c_min, c_plus = st.sidebar.columns([2.2, 0.9, 0.9])
-    
     with c_alloc:
         st.number_input(f"alloc_{name}", min_value=0, max_value=100, step=1, key=state_key, label_visibility="collapsed")
     with c_min:
-        if st.button("➖", key=f"del_{name}", use_container_width=True):
+        if st.button("➖", key=f"del_{name}"):
             if len(st.session_state.assets_data[name]) > 1:
                 st.session_state.assets_data[name].pop()
+                save_config() # Auto-save saat struktur berubah
                 st.rerun()
     with c_plus:
-        if st.button("➕", key=f"add_{name}", use_container_width=True):
+        if st.button("➕", key=f"add_{name}"):
             st.session_state.assets_data[name].append("")
+            save_config() # Auto-save saat struktur berubah
             st.rerun()
     
     current_assets = st.session_state.assets_data[name]
@@ -157,29 +151,25 @@ def render_open_cluster(name, display_name, state_key):
     for idx, asset in enumerate(current_assets):
         col_a, col_w = st.sidebar.columns([2, 1.5])
         with col_a:
-            new_val = st.text_input(f"t_{name}_{idx}", value=asset, key=f"in_{name}_{idx}", label_visibility="collapsed").strip().upper()
-            st.session_state.assets_data[name][idx] = new_val
+            val = st.text_input(f"in_{name}_{idx}", value=asset, key=f"txt_{name}_{idx}", label_visibility="collapsed").upper()
+            st.session_state.assets_data[name][idx] = val
         with col_w:
             st.markdown(f"<div class='locked-weight'>{w_list[idx]}% 🔒</div>", unsafe_allow_html=True)
-        if new_val:
-            final_assets.append(new_val)
+        if val:
+            final_assets.append(val)
             final_weights.append(w_list[idx])
-            
     st.sidebar.markdown("---")
 
-render_open_cluster('Growth', 'Growth Engine', 's_growth')
-render_open_cluster('Tactical', 'Tactical Support', 's_tactical')
-render_open_cluster('Hedging', 'Hedging & Defense', 's_hedging')
+render_cluster('Growth', 'Growth Engine', 's_growth')
+render_cluster('Tactical', 'Tactical Support', 's_tactical')
+render_cluster('Hedging', 'Hedging & Defense', 's_hedging')
 
-total_check = st.session_state.s_growth + st.session_state.s_tactical + st.session_state.s_hedging
-if total_check != 100:
-    st.sidebar.error(f"⚠️ Total Alokasi: {total_check}%. Wajib 100%!")
-else:
-    if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
-        save_config()
-        st.sidebar.success("Blueprint Tersimpan!")
+# TOMBOL SAVE: Sangat krusial untuk diklik sebelum refresh
+if st.sidebar.button("💾 SAVE CONFIGURATION", use_container_width=True):
+    save_config()
+    st.sidebar.success("Konfigurasi Terkunci!")
 
-# 4. Komputasi Data Utama
+# 5. Komputasi Data & Plotting
 @st.cache_data(ttl=3600)
 def fetch_data(tickers, benchmark):
     all_t = list(set([t for t in tickers if t] + [benchmark]))
@@ -206,10 +196,6 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
         sharpe = ((p_ret.mean() - (0.04/252)) / p_ret.std()) * np.sqrt(252)
         alpha = (p_ret.mean() * 252) - (0.04 + (p_ret.cov(b_ret)/b_ret.var()) * ((b_ret.mean() * 252) - 0.04))
 
-        s_n = "🔵 Baik" if sharpe > 1.5 else "🟡 Sedang" if sharpe >= 1.0 else "🔴 Kurang"
-        a_n = "🔵 Baik" if alpha*100 > 5 else "🟡 Sedang" if alpha*100 >= 0 else "🔴 Kurang"
-        d_n = "🔵 Baik" if dd.min() >= -0.15 else "🟡 Sedang" if dd.min() >= -0.30 else "🔴 Kurang"
-
         def kpi_box(label, val, status, legend):
             return f"""
             <div style="background-color: #ffffff; padding: 18px; border-radius: 10px; border: 1px solid #eeeeee; height: 100%;">
@@ -224,9 +210,9 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
         st.markdown("---")
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.markdown(kpi_box("Current Value vs Target", f"${p_cum.iloc[-1]:.2f}", "🎯 Target", f"Basis: ${cap_base:.0f} → Target: ${cap_target:.0f}"), unsafe_allow_html=True)
-        with m2: st.markdown(kpi_box("Sharpe Ratio (Efficiency)", f"{sharpe:.2f}", s_n, "🔴 <1.0 | 🟡 1.0-1.5 | 🔵 >1.5"), unsafe_allow_html=True)
-        with m3: st.markdown(kpi_box("Alpha vs Benchmark", f"{alpha*100:.1f}%", a_n, "🔴 <0% | 🟡 0-5% | 🔵 >5%"), unsafe_allow_html=True)
-        with m4: st.markdown(kpi_box("Max Drawdown", f"{dd.min()*100:.2f}%", d_n, "🔵 >-15% | 🟡 -30% | 🔴 <-30%"), unsafe_allow_html=True)
+        with m2: st.markdown(kpi_box("Sharpe Ratio (Efficiency)", f"{sharpe:.2f}", "🔵 Baik" if sharpe > 1.5 else "🔴 Kurang", "🔴 <1.0 | 🟡 1.0-1.5 | 🔵 >1.5"), unsafe_allow_html=True)
+        with m3: st.markdown(kpi_box("Alpha vs Benchmark", f"{alpha*100:.1f}%", "🔵 Baik" if alpha*100 > 5 else "🔴 Kurang", "🔴 <0% | 🟡 0-5% | 🔵 >5%"), unsafe_allow_html=True)
+        with m4: st.markdown(kpi_box("Max Drawdown", f"{dd.min()*100:.2f}%", "🔵 Baik" if dd.min() > -0.15 else "🔴 Kurang", "🔵 >-15% | 🟡 -30% | 🔴 <-30%"), unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         g1, g2 = st.columns(2)
@@ -234,15 +220,15 @@ if not df.empty and all(a in df.columns for a in final_assets) and bench_ticker 
             st.subheader("Equity Curve")
             fig1 = go.Figure()
             fig1.add_trace(go.Scatter(x=p_cum.index, y=p_cum, name='Portfolio', line=dict(color='#0088ff', width=2.5)))
-            fig1.add_trace(go.Scatter(x=b_cum.index, y=b_cum, name=f'S&P 500 ({bench_ticker})', line=dict(color='#333333', width=2)))
+            fig1.add_trace(go.Scatter(x=b_cum.index, y=b_cum, name='S&P 500', line=dict(color='#333333', width=2)))
             fig1.add_hline(y=cap_target, line_dash="dot", line_color="#ff4b4b")
-            fig1.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True), template="simple_white", legend=dict(orientation="h", y=1.1, x=0))
-            st.plotly_chart(fig1, use_container_width=True, config={'staticPlot': True})
+            fig1.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), template="simple_white", legend=dict(orientation="h", y=1.1, x=0))
+            st.plotly_chart(fig1, use_container_width=True)
         with g2:
             st.subheader("Drawdown Map")
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(x=dd.index, y=dd, fill='tozeroy', line=dict(color='#ff4b4b', width=1)))
-            fig2.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(fixedrange=True), yaxis=dict(fixedrange=True, tickformat='.1%'), template="simple_white")
-            st.plotly_chart(fig2, use_container_width=True, config={'staticPlot': True})
+            fig2.update_layout(height=380, margin=dict(l=0,r=0,t=0,b=0), template="simple_white")
+            st.plotly_chart(fig2, use_container_width=True)
 else:
     st.info("Input valid Tickers to generate blueprint...")
