@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # 1. Konfigurasi Halaman & UI Clean
-st.set_page_config(page_title="Growth Blueprint V23", layout="wide")
+st.set_page_config(page_title="Growth Blueprint V24", layout="wide")
 
 st.markdown("""
     <style>
@@ -33,16 +33,30 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    /* Menghilangkan tombol Spin (-+) bawaan pada kotak input angka */
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
+    /* 1. MENGHILANGKAN TOMBOL (+/-) BAWAAN KOTAK ANGKA SECARA TOTAL */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none !important;
+        margin: 0 !important;
+        display: none !important;
+    }
+    input[type="number"] {
+        -moz-appearance: textfield !important;
     }
 
-    /* Merapikan tinggi tombol agar sejajar presisi dengan kotak input */
-    .stButton>button {
-        height: 39px;
+    /* 2. MEMAKSA KOLOM SIDEBAR TETAP HORIZONTAL DI HP (TIDAK BERTUMPUK KE BAWAH) */
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        flex-direction: row !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="column"] {
+        min-width: 0 !important; 
+    }
+
+    /* 3. Merapikan tinggi tombol agar simetris dengan kotak input */
+    .stButton > button {
+        height: 39px !important;
+        padding: 0px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -83,14 +97,20 @@ final_assets = []
 final_weights = []
 
 def render_open_cluster(name, display_name, state_key):
-    # Header Kluster (Gaya sama persis dengan 'Konfigurasi Portofolio')
+    # Header Kluster (Sama persis dengan Konfigurasi Portofolio)
     st.sidebar.header(display_name)
     
-    # Label manual agar bisa mengontrol posisi kolom di bawahnya
-    st.sidebar.markdown("<p style='font-size:13px; color:#555555; margin-bottom:5px;'>Target Alokasi (%) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Aset (- / +)</p>", unsafe_allow_html=True)
+    # Label Atas yang Presisi
+    st.sidebar.markdown("""
+    <div style='display: flex; justify-content: space-between; font-size: 13px; color: #555555; margin-bottom: 2px;'>
+        <div style='flex: 2.2;'>Target Alokasi (%)</div>
+        <div style='flex: 1.8; text-align: center;'>Aset (➖ / ➕)</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Baris 1: Alokasi % | Tombol Hapus | Tombol Tambah (Terlihat seperti menyatu)
-    c_alloc, c_min, c_plus = st.sidebar.columns([2.5, 1, 1])
+    # Baris 1: Dipecah 3 Kolom tapi dipaksa CSS tetap 1 baris di HP [ Input | - | + ]
+    c_alloc, c_min, c_plus = st.sidebar.columns([2.2, 0.9, 0.9])
+    
     with c_alloc:
         st.number_input(f"alloc_{name}", min_value=0, max_value=100, step=1, key=state_key, label_visibility="collapsed")
     with c_min:
